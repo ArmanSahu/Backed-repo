@@ -1,0 +1,31 @@
+const express = require("express");
+const app = express();
+const cors = require("cors");
+const sql = require("mssql");
+const multer = require("multer");
+const azure = require("@azure/storage-blob");
+
+app.use(cors());
+app.use(express.json());
+
+const dbConfig = {
+  user: "your-db-user",
+  password: "your-password",
+  server: "your-db-server.database.windows.net",
+  database: "MediaPortalDB",
+  options: { encrypt: true }
+};
+
+// Endpoint to fetch videos
+app.get("/api/videos", async (req, res) => {
+  try {
+    await sql.connect(dbConfig);
+    const result = await sql.query("SELECT * FROM Videos");
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.listen(3000, () => console.log("Server running on port 3000"));
+
