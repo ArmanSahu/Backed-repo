@@ -1,31 +1,41 @@
-const express = require("express");
-const app = express();
-const cors = require("cors");
-const sql = require("mssql");
-const multer = require("multer");
-const azure = require("@azure/storage-blob");
 
-app.use(cors());
-app.use(express.json());
+// ✅ Route for admin to upload video file + metadata
+const upload = multer({ storage: multer.memoryStorage() });
 
-const dbConfig = {
-  user: "your-db-user",
-  password: "your-password",
-  server: "your-db-server.database.windows.net",
-  database: "MediaPortalDB",
-  options: { encrypt: true }
-};
-
-// Endpoint to fetch videos
-app.get("/api/videos", async (req, res) => {
+app.post("/api/upload", upload.single("video"), async (req, res) => {
   try {
+    const title = req.body.title;
+    const file = req.file;
+
+    if (!file || !title) {
+      return res.status(400).json({ error: "Title and video file are required" });
+    }
+
+    const blobName = file.originalname.replace(/\s+/g, "_") + "_" + Date.now();
+    const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+
+    await blockBlobClient.uploadData(file.buffer, {
+      blobHTTPHeaders: { blobContentType: file.mimetype },
+    });
+
+    const blobUrl = blockBlobClient.url;
+
     await sql.connect(dbConfig);
-    const result = await sql.query("SELECT * FROM Videos");
-    res.json(result.recordset);
+    await sql.query(`
+      INSERT INTO Videos (title, blobUrl, uploadedAt)
+      VALUES ('${title}', '${blobUrl}', GETDATE())
+    `);
+
+    res.status(200).json({ message: "Video uploaded successfully", blobUrl });
   } catch (err) {
-    res.status(500).send(err.message);
+    console.error("Upload error:", err.message);
+    res.status(500).json({ error: "Upload failed" });
   }
 });
 
-app.listen(3000, () => console.log("Server running on port 3000"));
+// ✅ Start server
+app.listen(3000, () => {
+  console.log("✅ Server running on port 3000");
+});
+
 
